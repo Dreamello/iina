@@ -1,0 +1,178 @@
+name: Build IINA
+
+on:
+  workflow_dispatch:
+    inputs:
+      iina_ref:
+        description: 'iina/iina git ref to build (branch, tag, or SHA)'
+        required: false
+        type: string
+        default: 'develop'
+      publish_release:
+        description: 'Publish the built app as a GitHub release'
+        required: false
+        type: boolean
+        default: false
+  push:
+    branches: [main]
+  schedule:
+    # daily at 03:17 UTC; skips (with no failure email) when upstream
+    # develop hasn't moved since the last successful scheduled build
+    - cron: '17 3 * * *'
+
+env:
+  DEVELOPER_DIR: /Applications/Xcode_26.5.app/Contents/Developer
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    outputs:
+      should_build: ${{ steps.check.outputs.should_build }}
+      upstream_sha: ${{ steps.check.outputs.upstream_sha }}
+    steps:
+      - name: Check whether upstream moved since last release
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          ref="${{ inputs.iina_ref || 'develop' }}"
+          sha=$(git ls-remote https://github.com/iina/iina "refs/heads/$ref" | cut -c1-7)
+          if [[ -z "$sha" ]]; then
+            # ref is a tag or SHA, not a branch — always build
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
+            echo "upstream_sha=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "upstream_sha=$sha" >> "$GITHUB_OUTPUT"
+          if [[ "${{ github.event_name }}" != "schedule" ]]; then
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # scheduled run: skip if we already released a build of this upstream SHA
+          if gh api "repos/$GITHUB_REPOSITORY/releases" --paginate -q '.[].tag_name' | grep -q -- "-$sha\$"; then
+            echo "Upstream $ref @ $sha already built and released; skipping."
+            echo "should_build=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  build:
+    needs: preflight
+    if: needs.preflight.outputs.should_build == 'true'
+    runs-on: macos-26
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout this repo (patches)
+        uses: actions/checkout@v4
+        with:
+          path: patched-iina
+
+      - name: Checkout IINA
+        run: |
+          set -euo pipefail
+          git clone --depth 1 --branch "${{ inputs.iina_ref || 'develop' }}" \
+            https://github.com/iina/iina iina 2>/dev/null || {
+            # ref may be a SHA rather than a branch/tag
+            git init iina
+            git -C iina remote add origin https://github.com/iina/iina
+            git -C iina fetch --depth 1 origin "${{ inputs.iina_ref }}"
+            git -C iina checkout --detach FETCH_HEAD
+          }
+          echo "IINA_SHA=$(git -C iina rev-parse --short HEAD)" >> "$GITHUB_ENV"
+          git -C iina log --oneline -1
+
+      - name: Apply patches
+        run: |
+          set -euo pipefail
+          cd iina
+          for p in ../patched-iina/patches/*.patch; do
+            echo "Applying $(basename "$p")"
+            if git apply --check --recount --ignore-space-change --ignore-whitespace "$p" 2>/dev/null; then
+              git apply --recount --ignore-space-change --ignore-whitespace "$p"
+            else
+              patch -p1 --batch --forward -N -l < "$p"
+            fi
+          done
+
+      - name: Download official dylibs and yt-dlp
+        run: |
+          set -euo pipefail
+          cd iina
+          # --skip-plugins: the script's plugin downloads hit api.github.com
+          # unauthenticated, which is rate-limited from Actions runner IPs
+          ./other/download_libs.sh --arch arm64 --skip-plugins
+
+      - name: Download official plugins (authenticated)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cd iina
+          mkdir -p deps/plugins
+          for repo in iina/plugin-online-media iina/plugin-userscript iina/plugin-opensub; do
+            asset=$(gh api "repos/$repo/releases/latest" -q '.assets[] | select(.name | endswith(".iinaplgz")) | .browser_download_url' | head -1)
+            echo "Downloading $asset"
+            curl -fsSL "$asset" -o "deps/plugins/$(basename "$asset")"
+          done
+          ls deps/plugins
+
+      - name: Build IINA
+        run: |
+          set -euo pipefail
+          cd iina
+          xcodebuild \
+            -project iina.xcodeproj \
+            -scheme iina \
+            -configuration Nightly \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            ARCHS=arm64 \
+            ONLY_ACTIVE_ARCH=NO \
+            build
+
+      - name: Package
+        run: |
+          set -euo pipefail
+          APP="$RUNNER_TEMP/DerivedData/Build/Products/Nightly/IINA.app"
+          test -d "$APP"
+          VER=$(defaults read "$APP/Contents/Info.plist" CFBundleShortVersionString)
+          FULL_VER="${VER}-${IINA_SHA}"
+          echo "FULL_VER=$FULL_VER" >> "$GITHUB_ENV"
+          ARCHIVE="IINA-${FULL_VER}.tar.xz"
+          tar -C "$(dirname "$APP")" -cJf "$ARCHIVE" IINA.app
+          echo "ARCHIVE=$ARCHIVE" >> "$GITHUB_ENV"
+          shasum -a 256 "$ARCHIVE"
+          XCODE_VER=$(xcodebuild -version | awk 'NR==1{v=$2} NR==2{print v" ("$3")"}')
+          echo "XCODE_VER=$XCODE_VER" >> "$GITHUB_ENV"
+          echo "MACOS_VER=$(sw_vers -productVersion)" >> "$GITHUB_ENV"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: IINA-${{ env.FULL_VER }}
+          path: ${{ env.ARCHIVE }}
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish release
+        if: inputs.publish_release || github.event_name == 'schedule' || github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="IINA-${FULL_VER}"
+          NOTES=$(printf '%s\n\n%s\n%s\n' \
+            "iina/iina @ ${IINA_SHA} (ref: ${{ inputs.iina_ref || 'develop' }}), built with Xcode ${XCODE_VER} on macOS ${MACOS_VER}, arm64." \
+            "Patches:" \
+            "$(cd patched-iina/patches && ls *.patch | sed 's/^/- /; s/\.patch$//')")
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $TAG already exists; updating asset and notes"
+            gh release upload "$TAG" "$ARCHIVE" --repo "$GITHUB_REPOSITORY" --clobber
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes "$NOTES"
+          else
+            gh release create "$TAG" "$ARCHIVE" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "IINA-${FULL_VER}" \
+              --notes "$NOTES"
+          fi
