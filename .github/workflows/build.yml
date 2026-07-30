@@ -139,7 +139,7 @@ jobs:
           VER=$(defaults read "$APP/Contents/Info.plist" CFBundleShortVersionString)
           FULL_VER="${VER}-${IINA_SHA}"
           echo "FULL_VER=$FULL_VER" >> "$GITHUB_ENV"
-          ARCHIVE="IINA-${FULL_VER}.tar.xz"
+          ARCHIVE="iina-${FULL_VER}.tar.xz"
           tar -C "$(dirname "$APP")" -cJf "$ARCHIVE" IINA.app
           echo "ARCHIVE=$ARCHIVE" >> "$GITHUB_ENV"
           shasum -a 256 "$ARCHIVE"
@@ -150,7 +150,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: IINA-${{ env.FULL_VER }}
+          name: iina-${{ env.FULL_VER }}
           path: ${{ env.ARCHIVE }}
           if-no-files-found: error
           retention-days: 30
@@ -161,7 +161,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          TAG="IINA-${FULL_VER}"
+          TAG="iina-${FULL_VER}"
           NOTES=$(printf '%s\n\n%s\n%s\n' \
             "iina/iina @ ${IINA_SHA} (ref: ${{ inputs.iina_ref || 'develop' }}), built with Xcode ${XCODE_VER} on macOS ${MACOS_VER}, arm64." \
             "Patches:" \
@@ -173,6 +173,6 @@ jobs:
           else
             gh release create "$TAG" "$ARCHIVE" \
               --repo "$GITHUB_REPOSITORY" \
-              --title "IINA-${FULL_VER}" \
+              --title "iina-${FULL_VER}" \
               --notes "$NOTES"
           fi

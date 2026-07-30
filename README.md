@@ -43,8 +43,8 @@ The **Build IINA** workflow runs:
   - `iina_ref` — upstream branch, tag, or SHA to build (default `develop`)
   - `publish_release` — publish the result as a release
 
-Each build produces `IINA-<version>-<sha>.tar.xz` (e.g.
-`IINA-1.4.3-a25ed13.tar.xz`, where `<version>` is the app's marketing version
+Each build produces `iina-<version>-<sha>.tar.xz` (e.g.
+`iina-1.4.3-a25ed13.tar.xz`, where `<version>` is the app's marketing version
 and `<sha>` the upstream IINA commit built) as a workflow artifact; scheduled
 and push builds also publish it to a GitHub release with the same tag.
 
