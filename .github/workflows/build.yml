@@ -190,12 +190,3 @@ jobs:
               echo "Pruning release $tag"
               gh release delete "$tag" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag
             done
-
-      - name: Trigger iina-avs build
-        if: inputs.publish_release || github.event_name == 'schedule' || github.event_name == 'push'
-        env:
-          GH_TOKEN: ${{ secrets.IINA_AVS_TOKEN }}
-        run: |
-          set -euo pipefail
-          gh api repos/Dreamello/iina-avs/dispatches -f event_type=iina-built
-          echo "dispatched iina-built to Dreamello/iina-avs"
