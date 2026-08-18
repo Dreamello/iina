@@ -166,16 +166,29 @@ jobs:
             "iina/iina @ ${IINA_SHA} (ref: ${{ inputs.iina_ref || 'develop' }}), built with Xcode ${XCODE_VER} on macOS ${MACOS_VER}, arm64." \
             "Patches:" \
             "$(cd patched-iina/patches && ls *.patch | sed 's/^/- /; s/\.patch$//')")
-          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "Release $TAG already exists; updating asset and notes"
-            gh release upload "$TAG" "$ARCHIVE" --repo "$GITHUB_REPOSITORY" --clobber
-            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes "$NOTES"
-          else
-            gh release create "$TAG" "$ARCHIVE" \
-              --repo "$GITHUB_REPOSITORY" \
-              --title "iina-${FULL_VER}" \
-              --notes "$NOTES"
-          fi
+          # Re-checks existence on every attempt, so a create that half-landed
+          # before a transient API failure is finished by the upload branch.
+          publish() {
+            if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+              echo "Release $TAG already exists; updating asset and notes"
+              gh release upload "$TAG" "$ARCHIVE" --repo "$GITHUB_REPOSITORY" --clobber
+              gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes "$NOTES"
+            else
+              gh release create "$TAG" "$ARCHIVE" \
+                --repo "$GITHUB_REPOSITORY" \
+                --title "iina-${FULL_VER}" \
+                --notes "$NOTES"
+            fi
+          }
+          # 3 attempts, 10s/30s backoff: rides out transient GitHub API 5xx
+          # (a 503 here once threw away a green build).
+          for wait in 10 30 0; do
+            publish && exit 0
+            [[ "$wait" == 0 ]] && break
+            echo "publish failed; retrying in ${wait}s"
+            sleep "$wait"
+          done
+          exit 1
 
       - name: Prune old releases (keep 10)
         if: inputs.publish_release || github.event_name == 'schedule' || github.event_name == 'push'
