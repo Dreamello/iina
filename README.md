@@ -11,7 +11,6 @@ and builds with Xcode on an arm64 GitHub Actions runner.
 
 | Patch | Target | Purpose |
 |---|---|---|
-| `0001-xcodeproj-drop-x86-only-dylib-refs.patch` | `iina.xcodeproj/project.pbxproj` | build prerequisite: drop `libstdc++.6`/`libgcc_s.1.1` from the Copy Dylibs phase — x86-only GCC runtime libs that only exist in the universal dylib set, which break arm64-only builds |
 | `0002-mpv-render-h-add-render-param-backend.patch` | `deps/include/mpv/render.h` | declare the custom `MPV_RENDER_PARAM_BACKEND = 21` render parameter |
 | `0003-mpvcontroller-request-gpu-next-backend.patch` | `iina/MPVController.swift` | request the libmpv `gpu-next` render backend when creating the render context |
 | `0004-screenshot-keep-jxl-on-gpu-next.patch` | `iina/MPVController.swift` | keep JPEG XL screenshots on the VO path (gpu-next handles HDR tone mapping; the `screenshot-sw` workaround for mpv #15107 causes color mismatch) |
