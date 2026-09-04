@@ -49,7 +49,7 @@ Each build produces `iina-<version>-<sha>.tar.xz` (e.g.
 and `<sha>` the upstream IINA commit built) as a workflow artifact; scheduled
 and push builds also publish it to a GitHub release with the same tag.
 
-Only the 10 newest releases are kept; older ones (and their tags) are pruned
+Only the 3 newest releases are kept; older ones (and their tags) are pruned
 automatically after each publish.
 
 Builds are ad-hoc signed (not notarized): on first launch use right-click →

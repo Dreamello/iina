@@ -190,14 +190,14 @@ jobs:
           done
           exit 1
 
-      - name: Prune old releases (keep 10)
+      - name: Prune old releases (keep 3)
         if: inputs.publish_release || github.event_name == 'schedule' || github.event_name == 'push'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           gh api "repos/$GITHUB_REPOSITORY/releases" --paginate \
-            -q 'sort_by(.created_at) | reverse | .[10:] | .[].tag_name' \
+            -q 'sort_by(.published_at) | reverse | .[3:] | .[].tag_name' \
           | while IFS= read -r tag; do
               [[ -n "$tag" ]] || continue
               echo "Pruning release $tag"
