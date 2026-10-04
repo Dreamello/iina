@@ -5,7 +5,7 @@ patch set in `patches/` applied.
 
 This repository contains no IINA fork — each build clones upstream at the
 requested ref (default: `develop`), applies every `patches/*.patch` in order,
-and builds with Xcode on an arm64 GitHub Actions runner.
+and builds with Xcode 27.0 on the arm64 `xcode-27` GitHub Actions runner.
 
 ## Current patches
 

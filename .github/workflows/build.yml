@@ -21,7 +21,7 @@ on:
     - cron: '*/30 * * * *'
 
 env:
-  DEVELOPER_DIR: /Applications/Xcode_26.5.app/Contents/Developer
+  DEVELOPER_DIR: /Applications/Xcode_27.0.app/Contents/Developer
 
 jobs:
   preflight:
@@ -60,7 +60,7 @@ jobs:
   build:
     needs: preflight
     if: needs.preflight.outputs.should_build == 'true'
-    runs-on: macos-26
+    runs-on: xcode-27
     permissions:
       contents: write
     steps:
