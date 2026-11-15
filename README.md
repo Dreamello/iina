@@ -11,7 +11,7 @@ and builds with Xcode 27.0 on the arm64 `xcode-27` GitHub Actions runner.
 
 | Patch | Target | Purpose |
 |---|---|---|
-| `0002-mpv-render-h-add-render-param-backend.patch` | `deps/include/mpv/render.h` | declare the custom `MPV_RENDER_PARAM_BACKEND = 21` render parameter |
+| `0002-mpv-render-h-add-render-param-backend.patch` | `deps/include/mpv/render.h` | declare the custom `MPV_RENDER_PARAM_BACKEND = 65536` render parameter |
 | `0003-mpvcontroller-request-gpu-next-backend.patch` | `iina/MPVController.swift` | request the libmpv `gpu-next` render backend when creating the render context |
 | `0004-screenshot-keep-jxl-on-gpu-next.patch` | `iina/MPVController.swift` | keep JPEG XL screenshots on the VO path (gpu-next handles HDR tone mapping; the `screenshot-sw` workaround for mpv #15107 causes color mismatch) |
 
